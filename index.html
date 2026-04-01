@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>タップ／クリックするとサスケが出てくる</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a252f;
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #3e744e 0%, #1a252f 100%);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="oceanCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('oceanCanvas');
+        const ctx = canvas.getContext('2d');
+
+    
+        const CHARACTERS = [
+            {
+                name: 'sasuke1', down: './img/1.png',
+                up: './img/2.png', weight: 0.49
+            },
+
+            {
+                name: 'sasuke2', down: './img/2-1.png',
+                up: './img/2-2.png', weight: 0.49
+            },
+            {
+                name: '?', down: './img/3-1.png',
+                up: './img/3-2.png', weight: 0.02
+            }
+        ];
+
+        const GRAVITY = 0.5;
+        const BUOYANCY = -0.4;
+        const DRAG_NORMAL = 0.98;
+        const DRAG_STOP = 0.80;  
+        const OBJ_SIZE = 100;
+
+        CHARACTERS.forEach(char => {
+            char.imgDown = new Image(); char.imgDown.src = char.down;
+            char.imgUp = new Image(); char.imgUp.src = char.up;
+        });
+
+        let objects = [];
+        let bubbles = [];
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Bubble {
+            constructor(x, y) {
+                this.x = x + (Math.random() - 0.5) * 30;
+                this.y = y;
+                this.radius = Math.random() * 2 + 1;
+                this.vy = Math.random() * -3 - 1;
+                this.opacity = 1;
+            }
+            update() { this.y += this.vy; this.opacity -= 0.01; }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class SeaObject {
+            constructor(targetX, targetY) {
+                this.char = CHARACTERS[Math.random() < 0.1 ? 2 : (Math.random() < 0.5 ? 0 : 1)];
+                this.x = targetX;
+                this.y = -OBJ_SIZE;
+                this.targetY = targetY;
+                this.vy = 0;
+                this.angle = 0;
+                this.rotSpeed = (Math.random() - 0.5) * 0.2;
+                this.state = 'falling';
+                this.brakeTimer = 0; 
+                this.finished = false;
+            }
+
+            update() {
+                if (this.state === 'falling') {
+                    this.vy += GRAVITY;
+                    this.y += this.vy;
+                    this.angle += this.rotSpeed;
+                  
+                    if (this.y >= this.targetY - 40) {
+                        this.state = 'braking';
+                    }
+                }
+                else if (this.state === 'braking') {
+                    this.vy += GRAVITY;
+                    this.vy *= DRAG_STOP;
+                    this.y += this.vy;
+                    this.angle *= 0.9;
+                    this.brakeTimer++;
+
+                  
+                    if (Math.abs(this.vy) < 1.0 || this.brakeTimer > 20) {
+                        this.state = 'rising';
+                        this.vy = 0;
+                        for (let i = 0; i < 10; i++) bubbles.push(new Bubble(this.x, this.y + OBJ_SIZE / 2));
+                    }
+                }
+                else if (this.state === 'rising') {
+                    this.vy += BUOYANCY;
+                    this.vy *= DRAG_NORMAL;
+                    this.y += this.vy;
+                    this.angle = 0;
+                    if (this.y < -OBJ_SIZE) this.finished = true;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y + OBJ_SIZE / 2);
+                ctx.rotate(this.angle);
+                const img = (this.state === 'rising') ? this.char.imgUp : this.char.imgDown;
+                if (img.complete) {
+                    ctx.drawImage(img, -OBJ_SIZE / 2, -OBJ_SIZE / 2, OBJ_SIZE, OBJ_SIZE);
+                }
+                ctx.restore();
+            }
+        }
+
+        function handle(e) {
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+            objects.push(new SeaObject(x, y));
+        }
+        window.addEventListener('mousedown', handle);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); handle(e); }, { passive: false });
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+           
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            
+
+            bubbles.forEach((b, i) => { b.update(); b.draw(); if (b.opacity <= 0) bubbles.splice(i, 1); });
+            objects.forEach((o, i) => { o.update(); o.draw(); if (o.finished) objects.splice(i, 1); });
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+
+</html>
